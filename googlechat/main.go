@@ -118,9 +118,14 @@ func (g *googlechatNotifier) writeMessage(build *cbpb.Build) (*chat.Message, err
 		icon = "https://www.gstatic.com/images/icons/material/system/2x/question_mark_black_48dp.png"
 	}
 
+	logURL, err := notifiers.AddUTMParams(build.LogUrl, notifiers.ChatMedium)
+	if err != nil {
+		return nil, fmt.Errorf("failed to add UTM params: %w", err)
+	}
+
 	card := &chat.Card{
 		Header: &chat.CardHeader{
-			Title:    fmt.Sprintf("Build %s Status: %s", build.Id, build.Status),
+			Title:    fmt.Sprintf("Build %s Status: %s", build.Id[:8], build.Status),
 			ImageUrl: icon,
 		},
 		Sections: []*chat.Section{
@@ -134,11 +139,27 @@ func (g *googlechatNotifier) writeMessage(build *cbpb.Build) (*chat.Message, err
 					},
 				},
 			},
+			{
+				Widgets: []*chat.WidgetMarkup{
+					{
+						Buttons: []*chat.Button{
+							{
+								TextButton: &chat.TextButton{
+									Text: "open logs",
+									OnClick: &chat.OnClick{
+										OpenLink: &chat.OpenLink{
+											Url: logURL,
+										},
+									},
+								},
+							},
+						},
+					},
+				},
+			},
 		},
 	}
 
 	msg := chat.Message{Cards: []*chat.Card{card}}
-
 	return &msg, nil
-
 }
