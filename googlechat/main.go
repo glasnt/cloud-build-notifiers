@@ -24,6 +24,7 @@ import (
 	"github.com/GoogleCloudPlatform/cloud-build-notifiers/lib/notifiers"
 	log "github.com/golang/glog"
 	cbpb "google.golang.org/genproto/googleapis/devtools/cloudbuild/v1"
+	chat "google.golang.org/api/chat/v1"
 )
 
 const (
@@ -105,12 +106,9 @@ func (g *googlechatNotifier) SendNotification(ctx context.Context, build *cbpb.B
 	return nil
 }
 
-type ChatMessage struct { 
-	Text string `json:"text"`
-}
 
 //func (g *googlechatNotifier) writeMessage(build *cbpb.Build) (*chat.Message, error) {
-func (g *googlechatNotifier) writeMessage(build *cbpb.Build) (*ChatMessage, error) {
+func (g *googlechatNotifier) writeMessage(build *cbpb.Build) (*chat.Message, error) {
 
 	var clr string
 
@@ -124,14 +122,14 @@ func (g *googlechatNotifier) writeMessage(build *cbpb.Build) (*ChatMessage, erro
 	}
 
 	txt := fmt.Sprintf(
-		"v0.2 Cloud Build %s (%s, %s): %s",
+		"v0.3 Cloud Build %s (%s, %s): %s",
 		clr,
 		build.ProjectId,
 		build.Id,
 		build.Status,
 	)
 
-	msg := ChatMessage{Text: txt}
+	msg := chat.Message{Text: txt}
 
 	//var jsonStr = []byte(fmt.Sprintf(`{"text": "%s"}`, txt))
 	//log.Warningf("jsonStr: %s", jsonStr)
