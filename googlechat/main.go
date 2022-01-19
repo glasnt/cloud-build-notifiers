@@ -15,16 +15,16 @@
 package main
 
 import (
-	"encoding/json"
 	"bytes"
 	"context"
+	"encoding/json"
 	"fmt"
 	"net/http"
 
 	"github.com/GoogleCloudPlatform/cloud-build-notifiers/lib/notifiers"
 	log "github.com/golang/glog"
-	cbpb "google.golang.org/genproto/googleapis/devtools/cloudbuild/v1"
 	chat "google.golang.org/api/chat/v1"
+	cbpb "google.golang.org/genproto/googleapis/devtools/cloudbuild/v1"
 )
 
 const (
@@ -77,12 +77,10 @@ func (g *googlechatNotifier) SendNotification(ctx context.Context, build *cbpb.B
 	if err != nil {
 		return fmt.Errorf("failed to write Google Chat message: %w", err)
 	}
-
+	//TODO(glasnt) unsure if this is best practice.
 	payload := new(bytes.Buffer)
 	json.NewEncoder(payload).Encode(msg)
 
-	// TODO(glasnt) adjust
-	//return slack.PostWebhook(s.webhookURL, msg)
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, g.webhookURL, payload)
 	if err != nil {
 		return fmt.Errorf("failed to create a new HTTP request: %w", err)
@@ -99,41 +97,48 @@ func (g *googlechatNotifier) SendNotification(ctx context.Context, build *cbpb.B
 
 	if resp.StatusCode != http.StatusOK {
 		log.Warningf("got a non-OK response status %q (%d) from %q", resp.Status, resp.StatusCode, g.webhookURL)
-		log.Warningf("resp: %s", resp.Body)
 	}
 
 	log.V(2).Infoln("send HTTP request successfully")
 	return nil
 }
 
-
-//func (g *googlechatNotifier) writeMessage(build *cbpb.Build) (*chat.Message, error) {
 func (g *googlechatNotifier) writeMessage(build *cbpb.Build) (*chat.Message, error) {
 
-	var clr string
+	var icon string
 
 	switch build.Status {
 	case cbpb.Build_SUCCESS:
-		clr = "good"
-	case cbpb.Build_FAILURE, cbpb.Build_INTERNAL_ERROR, cbpb.Build_TIMEOUT:
-		clr = "danger"
+		icon = "https://www.gstatic.com/images/icons/material/system/2x/check_circle_googgreen_48dp.png"
+	case cbpb.Build_FAILURE, cbpb.Build_INTERNAL_ERROR:
+		icon = "https://www.gstatic.com/images/icons/material/system/2x/error_red_48dp.png"
+	case cbpb.Build_TIMEOUT:
+		icon = "https://www.gstatic.com/images/icons/material/system/2x/hourglass_empty_black_48dp.png"
 	default:
-		clr = "warning"
+		icon = "https://www.gstatic.com/images/icons/material/system/2x/question_mark_black_48dp.png"
 	}
 
-	txt := fmt.Sprintf(
-		"v0.3 Cloud Build %s (%s, %s): %s",
-		clr,
-		build.ProjectId,
-		build.Id,
-		build.Status,
-	)
+	card := &chat.Card{
+		Header: &chat.CardHeader{
+			Title:    fmt.Sprintf("Build %s Status: %s", build.Id, build.Status),
+			ImageUrl: icon,
+		},
+		Sections: []*chat.Section{
+			{
+				Widgets: []*chat.WidgetMarkup{
+					{
+						KeyValue: &chat.KeyValue{
+							TopLabel: "Created",
+							Content:  build.CreateTime.String(),
+						},
+					},
+				},
+			},
+		},
+	}
 
-	msg := chat.Message{Text: txt}
+	msg := chat.Message{Cards: []*chat.Card{card}}
 
-	//var jsonStr = []byte(fmt.Sprintf(`{"text": "%s"}`, txt))
-	//log.Warningf("jsonStr: %s", jsonStr)
-	// TODO(glasnt) adjust
 	return &msg, nil
 
 }
