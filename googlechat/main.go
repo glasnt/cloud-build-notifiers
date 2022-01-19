@@ -15,6 +15,7 @@
 package main
 
 import (
+	"encoding/json"
 	"bytes"
 	"context"
 	"fmt"
@@ -76,9 +77,12 @@ func (g *googlechatNotifier) SendNotification(ctx context.Context, build *cbpb.B
 		return fmt.Errorf("failed to write Google Chat message: %w", err)
 	}
 
+	payload := new(bytes.Buffer)
+	json.NewEncoder(payload).Encode(msg)
+
 	// TODO(glasnt) adjust
 	//return slack.PostWebhook(s.webhookURL, msg)
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost, g.webhookURL, bytes.NewBuffer(msg))
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, g.webhookURL, payload)
 	if err != nil {
 		return fmt.Errorf("failed to create a new HTTP request: %w", err)
 	}
@@ -101,11 +105,15 @@ func (g *googlechatNotifier) SendNotification(ctx context.Context, build *cbpb.B
 	return nil
 }
 
-//func (g *googlechatNotifier) writeMessage(build *cbpb.Build) (*chat.Message, error) {
-func (g *googlechatNotifier) writeMessage(build *cbpb.Build) ([]byte, error) {
+type ChatMessage struct { 
+	Text string `json:"text"`
+}
 
+//func (g *googlechatNotifier) writeMessage(build *cbpb.Build) (*chat.Message, error) {
+func (g *googlechatNotifier) writeMessage(build *cbpb.Build) (*ChatMessage, error) {
 
 	var clr string
+
 	switch build.Status {
 	case cbpb.Build_SUCCESS:
 		clr = "good"
@@ -116,16 +124,18 @@ func (g *googlechatNotifier) writeMessage(build *cbpb.Build) ([]byte, error) {
 	}
 
 	txt := fmt.Sprintf(
-		"Cloud Build %s (%s, %s): %s",
+		"v0.2 Cloud Build %s (%s, %s): %s",
 		clr,
 		build.ProjectId,
 		build.Id,
 		build.Status,
 	)
 
-	var jsonStr = []byte(fmt.Sprintf(`{"text": "%s"}`, txt))
-	log.Warningf("jsonStr: %s", jsonStr)
+	msg := ChatMessage{Text: txt}
+
+	//var jsonStr = []byte(fmt.Sprintf(`{"text": "%s"}`, txt))
+	//log.Warningf("jsonStr: %s", jsonStr)
 	// TODO(glasnt) adjust
-	return jsonStr, nil
+	return &msg, nil
 
 }
