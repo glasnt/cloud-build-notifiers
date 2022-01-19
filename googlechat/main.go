@@ -132,16 +132,6 @@ func (g *googlechatNotifier) writeMessage(build *cbpb.Build) (*chat.Message, err
 			{
 				Widgets: []*chat.WidgetMarkup{
 					{
-						KeyValue: &chat.KeyValue{
-							TopLabel: "Created",
-							Content:  build.CreateTime.String(),
-						},
-					},
-				},
-			},
-			{
-				Widgets: []*chat.WidgetMarkup{
-					{
 						Buttons: []*chat.Button{
 							{
 								TextButton: &chat.TextButton{
