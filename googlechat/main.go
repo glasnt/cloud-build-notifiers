@@ -24,6 +24,7 @@ import (
 	"github.com/GoogleCloudPlatform/cloud-build-notifiers/lib/notifiers"
 	log "github.com/golang/glog"
 	chat "google.golang.org/api/chat/v1"
+
 	cbpb "google.golang.org/genproto/googleapis/devtools/cloudbuild/v1"
 )
 
@@ -123,24 +124,118 @@ func (g *googlechatNotifier) writeMessage(build *cbpb.Build) (*chat.Message, err
 		return nil, fmt.Errorf("failed to add UTM params: %w", err)
 	}
 
+	// Basic card setup
+	duration := build.GetFinishTime().AsTime().Sub(build.GetStartTime().AsTime())
+	duration_min, duration_sec := int(duration.Minutes()), int(duration.Seconds())-int(duration.Minutes())*60
+	duration_fmt := fmt.Sprintf("%d min %d sec", duration_min, duration_sec)
+
 	card := &chat.Card{
 		Header: &chat.CardHeader{
 			Title:    fmt.Sprintf("Build %s Status: %s", build.Id[:8], build.Status),
+			Subtitle: build.ProjectId,
 			ImageUrl: icon,
 		},
 		Sections: []*chat.Section{
 			{
 				Widgets: []*chat.WidgetMarkup{
 					{
-						Buttons: []*chat.Button{
-							{
-								TextButton: &chat.TextButton{
-									Text: "open logs",
-									OnClick: &chat.OnClick{
-										OpenLink: &chat.OpenLink{
-											Url: logURL,
-										},
-									},
+						KeyValue: &chat.KeyValue{
+							TopLabel: "Duration",
+							Content:  duration_fmt,
+						},
+					},
+				},
+			},
+		},
+	}
+
+	// Optional section if trigger, information
+	// TODO(glasnt)
+	if build.BuildTriggerId != "" {
+
+		log.Infof("Detected a build trigger id: %s", build.BuildTriggerId)
+
+		/*
+			//TODO(glasnt): Work out how to get trigger information for Uri links.
+			//  The repo name in `build` does not include the owner information
+			//  You need to inspect the trigger object to get the full repo name and/or the git URI.
+
+
+			ctx := context.Background()
+			cbapi, _ := cloudbuild.NewClient(ctx)
+
+			trigger_info := cbapi.GetBuildTrigger(ctx, &cbpb.GetBuildTriggerRequest{ProjectId: build.ProjectId, TriggerId: build.BuildTriggerId,})
+
+			log.Infof("Trigger Repo URI: %s", trigger_info.??)
+		*/
+
+		repo_name := build.Substitutions["REPO_NAME"]
+		trigger_name := build.Substitutions["TRIGGER_NAME"]
+		branch_name := build.Substitutions["BRANCH_NAME"]
+		commit := build.Substitutions["SHORT_SHA"]
+
+		card.Header.Subtitle = fmt.Sprintf("%s on %s", trigger_name, build.ProjectId)
+
+		build_info := &chat.Section{
+			Header: "Trigger information",
+			Widgets: []*chat.WidgetMarkup{
+				{
+
+					KeyValue: &chat.KeyValue{
+						TopLabel: "Trigger",
+						Content:  trigger_name,
+					},
+				},
+				{
+					KeyValue: &chat.KeyValue{
+						TopLabel: `Repo`,
+						Content:  repo_name,
+					},
+				},
+				{
+					KeyValue: &chat.KeyValue{
+						TopLabel: "Branch",
+						Content:  branch_name,
+					},
+				},
+				{
+					KeyValue: &chat.KeyValue{
+						TopLabel: "Commit",
+						Content:  commit,
+					},
+				},
+			},
+		}
+
+		card.Sections = append(card.Sections, build_info)
+	}
+
+	// Optional section if failure information
+	if build.FailureInfo != nil {
+		failure_info := &chat.Section{
+			Header: "Error information",
+			Widgets: []*chat.WidgetMarkup{
+				{
+					TextParagraph: &chat.TextParagraph{
+						Text: build.FailureInfo.GetDetail(),
+					},
+				},
+			},
+		}
+		card.Sections = append(card.Sections, failure_info)
+	}
+
+	// Append action button
+	action_section := &chat.Section{
+		Widgets: []*chat.WidgetMarkup{
+			{
+				Buttons: []*chat.Button{
+					{
+						TextButton: &chat.TextButton{
+							Text: "open logs",
+							OnClick: &chat.OnClick{
+								OpenLink: &chat.OpenLink{
+									Url: logURL,
 								},
 							},
 						},
@@ -149,6 +244,8 @@ func (g *googlechatNotifier) writeMessage(build *cbpb.Build) (*chat.Message, err
 			},
 		},
 	}
+
+	card.Sections = append(card.Sections, action_section)
 
 	msg := chat.Message{Cards: []*chat.Card{card}}
 	return &msg, nil
